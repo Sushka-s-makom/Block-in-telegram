@@ -29,5 +29,20 @@ def init_db() -> None:
         )
         conn.commit()
 
+def get_session(bot_user_id: int) -> StoredSession | None:
+    with sqlite3.connect(_db_path()) as conn:
+        row = conn.execute(
+            "select bot_user_id, telegram_user_id, session_string from user_sessions where bot_user_id = ?",
+            (bot_user_id,),
+        ).fetchone()
+
+    if row is None:
+        return None
+
+    return StoredSession(
+        bot_user_id=row[0],
+        telegram_user_id=row[1],
+        session_string=row[2],
+    )
 
 
