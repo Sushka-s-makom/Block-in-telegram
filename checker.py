@@ -1,0 +1,87 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+
+from telethon import TelegramClient, functions, types
+from telethon.errors import PeerIdInvalidError, RPCError, UserIsBlockedError
+
+logger = logging.getLogger(__name__)
+
+
+class BlockStatusUndeterminedError(RuntimeError):
+    """Raised when Telegram does not expose a reliable block status."""
+
+
+def _extract_message_ids_from_updates(result: object) -> list[int]:
+    message_ids: list[int] = []
+
+    messages = getattr(result, "messages", None) or []
+    for message in messages:
+        message_id = getattr(message, "id", None)
+        if isinstance(message_id, int):
+            message_ids.append(message_id)
+
+    updates = getattr(result, "updates", None) or []
+    for update in updates:
+        update_message = getattr(update, "message", None)
+        update_message_id = getattr(update_message, "id", None)
+        if isinstance(update_message_id, int):
+            message_ids.append(update_message_id)
+            continue
+
+        direct_message_id = getattr(update, "message_id", None)
+        if isinstance(direct_message_id, int):
+            message_ids.append(direct_message_id)
+
+    return list(dict.fromkeys(message_ids))
+
+
+async def _delete_service_messages(client: TelegramClient, peer: int, result: object) -> None:
+    message_ids = _extract_message_ids_from_updates(result)
+    if not message_ids:
+        return
+
+    try:
+        await client.delete_messages(entity=peer, message_ids=message_ids, revoke=True)
+        logger.info("_delete_service_messages: peer=%s message_ids=%s", peer, message_ids)
+    except RPCError as exc:
+        logger.warning(
+            "_delete_service_messages: failed peer=%s message_ids=%s error=%s",
+            peer,
+            message_ids,
+            exc,
+        )
+
+
+async def _delete_recent_phone_call_messages(client: TelegramClient, peer: int, call_id: int) -> None:
+    await asyncio.sleep(0.6)
+
+    message_ids: list[int] = []
+    async for message in client.iter_messages(peer, limit=10):
+        action = getattr(message, "action", None)
+        if isinstance(action, types.MessageActionPhoneCall) and action.call_id == call_id:
+            message_ids.append(message.id)
+
+    if not message_ids:
+        return
+
+    try:
+        await client.delete_messages(entity=peer, message_ids=message_ids, revoke=True)
+        logger.info(
+            "_delete_recent_phone_call_messages: peer=%s call_id=%s message_ids=%s",
+            peer,
+            call_id,
+            message_ids,
+        )
+    except RPCError as exc:
+        logger.warning(
+            "_delete_recent_phone_call_messages: failed peer=%s call_id=%s error=%s",
+            peer,
+            call_id,
+            exc,
+        )
+
+
+
