@@ -82,6 +82,22 @@ async def _delete_recent_phone_call_messages(client: TelegramClient, peer: int, 
             call_id,
             exc,
         )
+async def resolve_user_id(client: TelegramClient, raw_target: str) -> int:
+    target = raw_target.strip()
+    if not target:
+        raise ValueError("Target is empty")
 
+    if target.startswith("@"):
+        entity = await client.get_entity(target)
+    else:
+        try:
+            entity = await client.get_entity(int(target))
+        except ValueError:
+            entity = await client.get_entity(target)
 
+    if not isinstance(entity, types.User):
+        raise TypeError("Target is not a user")
+    if entity.bot:
+        raise TypeError("Target is a bot")
 
+    return entity.id
