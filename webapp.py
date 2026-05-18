@@ -91,3 +91,14 @@ SETTINGS = load_settings()
 configure_logging()
 os.makedirs(SETTINGS.user_session_dir, exist_ok=True)
 init_db()
+
+def user_session_path(user_id: int) -> str:
+    return os.path.join(SETTINGS.user_session_dir, str(user_id))
+
+
+def panel_url_query(uid: str, exp: str, sig: str) -> str:
+    return f"/panel?uid={uid}&exp={exp}&sig={sig}"
+
+
+def panel_url_with_message(uid: str, exp: str, sig: str, message: str) -> str:
+    return f"{panel_url_query(uid, exp, sig)}&msg={quote_plus(message)}"
