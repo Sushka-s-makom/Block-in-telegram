@@ -101,3 +101,69 @@ async def resolve_user_id(client: TelegramClient, raw_target: str) -> int:
         raise TypeError("Target is a bot")
 
     return entity.id
+
+async def _get_current_chat_theme(client: TelegramClient, user_id: int) -> types.TypeInputChatTheme:
+    full = await client(functions.users.GetFullUserRequest(id=user_id))
+    current_theme = getattr(full.full_user, "theme", None)
+    current_emoticon = getattr(current_theme, "emoticon", None)
+    if current_emoticon:
+        return types.InputChatTheme(emoticon=current_emoticon)
+    return types.InputChatThemeEmpty()
+
+
+async def _pick_probe_chat_theme(
+    client: TelegramClient,
+    current_emoticon: str | None,
+) -> types.InputChatTheme:
+    chat_themes = await client(functions.account.GetChatThemesRequest(hash=0))
+    chat_items = getattr(chat_themes, "themes", [])
+
+    for theme in chat_items:
+        if isinstance(theme, types.ChatTheme) and theme.emoticon and theme.emoticon != current_emoticon:
+            return types.InputChatTheme(emoticon=theme.emoticon)
+        if isinstance(theme, types.Theme) and theme.emoticon and theme.emoticon != current_emoticon:
+            return types.InputChatTheme(emoticon=theme.emoticon)
+
+    themes = await client(functions.account.GetThemesRequest(format="android", hash=0))
+    items = getattr(themes, "themes", [])
+    for theme in items:
+        if isinstance(theme, types.Theme) and theme.for_chat and theme.emoticon and theme.emoticon != current_emoticon:
+            return types.InputChatTheme(emoticon=theme.emoticon)
+
+    raise BlockStatusUndeterminedError("No alternative chat theme found")
+
+
+async def check_blocked_via_theme(client: TelegramClient, user_id: int) -> bool:
+    original_theme = await _get_current_chat_theme(client, user_id)
+    current_emoticon = getattr(original_theme, "emoticon", None)
+    probe_theme = await _pick_probe_chat_theme(client, current_emoticon)
+
+    try:
+        result = await client(
+            functions.messages.SetChatThemeRequest(
+                peer=user_id,
+                theme=probe_theme,
+            )
+        )
+    except UserIsBlockedError:
+        return True
+    except PeerIdInvalidError:
+        return True
+    except RPCError as exc:
+        raise BlockStatusUndeterminedError(str(exc)) from exc
+
+    try:
+        revert_result = await client(
+            functions.messages.SetChatThemeRequest(
+                peer=user_id,
+                theme=original_theme,
+            )
+        )
+        await _delete_service_messages(client, user_id, result)
+        await _delete_service_messages(client, user_id, revert_result)
+    except RPCError as exc:
+        raise BlockStatusUndeterminedError(str(exc)) from exc
+
+    return False
+
+
