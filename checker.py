@@ -166,4 +166,49 @@ async def check_blocked_via_theme(client: TelegramClient, user_id: int) -> bool:
 
     return False
 
+async def check_blocked_via_call(client: TelegramClient, user_id: int) -> bool:
+    protocol = types.PhoneCallProtocol(
+        min_layer=65,
+        max_layer=65,
+        library_versions=["Telethon"],
+        udp_p2p=True,
+        udp_reflector=True,
+    )
 
+    try:
+        result = await client(
+            functions.phone.RequestCallRequest(
+                user_id=user_id,
+                g_a_hash=os.urandom(32),
+                protocol=protocol,
+                video=False,
+            )
+        )
+    except UserIsBlockedError:
+        return True
+    except RPCError as exc:
+        raise BlockStatusUndeterminedError(str(exc)) from exc
+
+    phone_call = result.phone_call
+    access_hash = getattr(phone_call, "access_hash", None)
+    call_id = getattr(phone_call, "id", None)
+    if access_hash is None or call_id is None:
+        raise BlockStatusUndeterminedError(f"Unexpected phone call type: {type(phone_call).__name__}")
+
+
+try:
+        discard_result = await client(
+            functions.phone.DiscardCallRequest(
+                peer=types.InputPhoneCall(id=call_id, access_hash=access_hash),
+                duration=0,
+                reason=types.PhoneCallDiscardReasonHangup(),
+                connection_id=0,
+                video=False,
+            )
+        )
+        await _delete_service_messages(client, user_id, discard_result)
+        await _delete_recent_phone_call_messages(client, user_id, call_id)
+    except RPCError as exc:
+        raise BlockStatusUndeterminedError(str(exc)) from exc
+
+    return False
