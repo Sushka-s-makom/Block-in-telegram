@@ -195,8 +195,7 @@ async def check_blocked_via_call(client: TelegramClient, user_id: int) -> bool:
     if access_hash is None or call_id is None:
         raise BlockStatusUndeterminedError(f"Unexpected phone call type: {type(phone_call).__name__}")
 
-
-try:
+    try:
         discard_result = await client(
             functions.phone.DiscardCallRequest(
                 peer=types.InputPhoneCall(id=call_id, access_hash=access_hash),
@@ -212,3 +211,9 @@ try:
         raise BlockStatusUndeterminedError(str(exc)) from exc
 
     return False
+
+async def check_blocked_with_fallback(client: TelegramClient, user_id: int) -> bool:
+    theme_result = await check_blocked_via_theme(client, user_id)
+    if theme_result:
+        return True
+    return await check_blocked_via_call(client, user_id) 
