@@ -102,3 +102,29 @@ def panel_url_query(uid: str, exp: str, sig: str) -> str:
 
 def panel_url_with_message(uid: str, exp: str, sig: str, message: str) -> str:
     return f"{panel_url_query(uid, exp, sig)}&msg={quote_plus(message)}"
+def ensure_access(uid: str, exp: str, sig: str) -> int:
+    if not verify_panel_params(uid, exp, sig, SETTINGS.app_secret):
+        raise HTTPException(status_code=403, detail="Invalid or expired panel link")
+    return int(uid)
+
+
+async def create_user_client(user_id: int) -> TelegramClient:
+    stored = get_session(user_id)
+    session = StringSession(stored.session_string) if stored is not None else user_session_path(user_id)
+    client = TelegramClient(session, SETTINGS.api_id, SETTINGS.api_hash)
+    await client.connect()
+    return client
+
+
+async def is_connected(user_id: int) -> bool:
+    client = await create_user_client(user_id)
+    try:
+        return await client.is_user_authorized()
+    finally:
+        await client.disconnect()
+
+
+async def cleanup_pending_auth(user_id: int) -> None:
+    pending = PENDING_AUTHS.pop(user_id, None)
+    if pending is not None:
+        await pending.client.disconnect()
