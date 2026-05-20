@@ -128,3 +128,124 @@ async def cleanup_pending_auth(user_id: int) -> None:
     pending = PENDING_AUTHS.pop(user_id, None)
     if pending is not None:
         await pending.client.disconnect()
+
+def render_page(
+    uid: str,
+    exp: str,
+    sig: str,
+    *,
+    content: str,
+    title: str = "Block Checker",
+) -> HTMLResponse:
+    return HTMLResponse(
+        f"""
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{html.escape(title)}</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f4f1ea;
+      --card: #fffdf8;
+      --text: #1f1a17;
+      --muted: #6c625a;
+      --accent: #1f6feb;
+      --danger: #c0392b;
+      --ok: #1e8449;
+      --border: #d8cec2;
+    }}
+    body {{
+      margin: 0;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, sans-serif;
+      background:
+        radial-gradient(circle at top left, #ffe8c7 0, transparent 24%),
+        radial-gradient(circle at bottom right, #dcecff 0, transparent 26%),
+        var(--bg);
+      color: var(--text);
+    }}
+    .wrap {{
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }}
+    .card {{
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: 0 16px 40px rgba(31, 26, 23, 0.08);
+    }}
+    h1 {{
+      margin: 0 0 10px;
+      font-size: 28px;
+    }}
+    p {{
+      color: var(--muted);
+      line-height: 1.5;
+    }}
+    form {{
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+    }}
+    input, button, select {{
+      font: inherit;
+    }}
+    input {{
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: white;
+    }}
+    button, .button-link {{
+      display: inline-block;
+      padding: 12px 16px;
+      border-radius: 12px;
+      border: 0;
+      background: var(--accent);
+      color: white;
+      text-decoration: none;
+      cursor: pointer;
+      text-align: center;
+    }}
+    .button-muted {{
+      background: #6c625a;
+    }}
+    .button-danger {{
+      background: var(--danger);
+    }}
+    .grid {{
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }}
+    .note {{
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #f7f2eb;
+      color: var(--text);
+    }}
+    .ok {{
+      color: var(--ok);
+      font-weight: 600;
+    }}
+    .bad {{
+      color: var(--danger);
+      font-weight: 600;
+    }}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      {content}
+    </div>
+  </div>
+</body>
+</html>
+"""
+    )
