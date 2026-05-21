@@ -249,3 +249,117 @@ def render_page(
 </html>
 """
     )
+
+def hidden_inputs(uid: str, exp: str, sig: str) -> str:
+    return (
+        f'<input type="hidden" name="uid" value="{html.escape(uid)}">'
+        f'<input type="hidden" name="exp" value="{html.escape(exp)}">'
+        f'<input type="hidden" name="sig" value="{html.escape(sig)}">'
+    )
+
+
+async def render_panel(uid: str, exp: str, sig: str, message: str = "") -> HTMLResponse:
+    user_id = ensure_access(uid, exp, sig)
+    connected = await is_connected(user_id)
+    pending = PENDING_AUTHS.get(user_id)
+
+    message_block = f'<div class="note">{html.escape(message)}</div>' if message else ""
+
+    if pending is not None:
+        if pending.stage == "code":
+            content = f"""
+<h1>Подтверждение входа</h1>
+<p>Введите код, который Telegram отправил на номер <b>{html.escape(pending.phone)}</b>. Код вводится в веб-панели, не в чате бота.</p>
+{message_block}
+<form method="post" action="/auth/code">
+  {hidden_inputs(uid, exp, sig)}
+  <input name="code" placeholder="Код из Telegram" required>
+  <button type="submit">Подтвердить код</button>
+</form>
+"""
+            return render_page(uid, exp, sig, content=content)
+
+        if pending.stage == "password":
+            content = f"""
+<h1>Двухфакторная защита</h1>
+<p>Введите пароль двухфакторной защиты для завершения входа.</p>
+{message_block}
+<form method="post" action="/auth/password">
+  {hidden_inputs(uid, exp, sig)}
+  <input type="password" name="password" placeholder="Пароль 2FA" required>
+  <button type="submit">Подтвердить пароль</button>
+</form>
+"""
+            return render_page(uid, exp, sig, content=content)
+
+    if not connected:
+        content = f"""
+<h1>Подключение аккаунта</h1>
+<p>Подключите аккаунт через телефон и код. После успешного входа панель сохранит его как <code>StringSession</code> в базе и будет использовать для проверок.</p>
+{message_block}
+<form method="post" action="/auth/start">
+  {hidden_inputs(uid, exp, sig)}
+  <input name="phone" placeholder="+79991234567" required>
+  <button type="submit">Подключить через телефон и код</button>
+</form>
+"""
+        return render_page(uid, exp, sig, content=content)
+
+    content = f"""
+<h1>Block Checker</h1>
+<p>Аккаунт подключён. Выберите режим проверки и введите <code>@username</code> или numeric ID.</p>
+{message_block}
+<form method="post" action="/check">
+  {hidden_inputs(uid, exp, sig)}
+  <input name="target" placeholder="@username или 123456789" required>
+  <div class="grid">
+    <button type="submit" name="mode" value="theme">Тихая проверка</button>
+    <button type="submit" name="mode" value="call">Заметная проверка</button>
+    <button type="submit" name="mode" value="combo">Тихая + звонок</button>
+  </div>
+</form>
+<form method="post" action="/logout">
+  {hidden_inputs(uid, exp, sig)}
+  <button class="button-danger" type="submit">Отключить аккаунт</button>
+</form>
+"""
+    return render_page(uid, exp, sig, content=content)
+
+
+@app.get("/health")
+async def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/panel", response_class=HTMLResponse)
+async def panel(uid: str, exp: str, sig: str, msg: str = "") -> HTMLResponse:
+    return await render_panel(uid, exp, sig, msg)
+
+
+@app.post("/auth/start")
+async def auth_start(
+    uid: str = Form(...),
+    exp: str = Form(...),
+    sig: str = Form(...),
+    phone: str = Form(...),
+) -> RedirectResponse:
+    user_id = ensure_access(uid, exp, sig)
+    await cleanup_pending_auth(user_id)
+    client = await create_user_client(user_id)
+
+    try:
+        result = await client.send_code_request(phone.strip())
+    except (PhoneNumberInvalidError, PhoneNumberFloodError):
+        await client.disconnect()
+        return RedirectResponse(
+            url=panel_url_with_message(uid, exp, sig, "Неверный или временно ограниченный номер"),
+            status_code=303,
+        )
+
+    PENDING_AUTHS[user_id] = PendingAuth(
+        client=client,
+        phone=phone.strip(),
+        phone_code_hash=result.phone_code_hash,
+        stage="code",
+    )
+    return RedirectResponse(url=panel_url_query(uid, exp, sig), status_code=303)
