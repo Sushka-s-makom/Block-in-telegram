@@ -443,3 +443,68 @@ async def auth_password(
         url=panel_url_with_message(uid, exp, sig, "Аккаунт подключён"),
         status_code=303,
     )
+
+@app.post("/logout")
+async def logout(
+    uid: str = Form(...),
+    exp: str = Form(...),
+    sig: str = Form(...),
+) -> RedirectResponse:
+    user_id = ensure_access(uid, exp, sig)
+    await cleanup_pending_auth(user_id)
+    delete_session(user_id)
+    for suffix in (".session", ".session-journal"):
+        session_file = f"{user_session_path(user_id)}{suffix}"
+        if os.path.exists(session_file):
+            os.remove(session_file)
+
+    return RedirectResponse(
+        url=panel_url_with_message(uid, exp, sig, "Аккаунт отключён"),
+        status_code=303,
+    )
+
+
+@app.post("/check")
+async def check(
+    uid: str = Form(...),
+    exp: str = Form(...),
+    sig: str = Form(...),
+    target: str = Form(...),
+    mode: str = Form(...),
+) -> RedirectResponse:
+    user_id = ensure_access(uid, exp, sig)
+    client = await create_user_client(user_id)
+
+    try:
+        if not await client.is_user_authorized():
+            return RedirectResponse(
+                url=panel_url_with_message(uid, exp, sig, "Сначала подключите аккаунт"),
+                status_code=303,
+            )
+        target_user_id = await resolve_user_id(client, target.strip())
+        if mode == "theme":
+            is_blocked = await check_blocked_via_theme(client, target_user_id)
+        elif mode == "call":
+            is_blocked = await check_blocked_via_call(client, target_user_id)
+        else:
+            is_blocked = await check_blocked_with_fallback(client, target_user_id)
+    except (
+        BlockStatusUndeterminedError,
+        PeerIdInvalidError,
+        UserIdInvalidError,
+        UsernameInvalidError,
+        UsernameNotOccupiedError,
+        TypeError,
+        ValueError,
+    ):
+        logger.exception("web check failed uid=%s target=%r mode=%s", user_id, target, mode)
+        result_text = "Пользователь вас не заблокировал"
+    else:
+        result_text = "Пользователь вас заблокировал" if is_blocked else "Пользователь вас не заблокировал"
+    finally:
+        await client.disconnect()
+
+    return RedirectResponse(
+        url=panel_url_with_message(uid, exp, sig, result_text),
+        status_code=303,
+    )
