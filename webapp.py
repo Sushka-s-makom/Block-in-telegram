@@ -363,3 +363,83 @@ async def auth_start(
         stage="code",
     )
     return RedirectResponse(url=panel_url_query(uid, exp, sig), status_code=303)
+
+@app.post("/auth/code")
+async def auth_code(
+    uid: str = Form(...),
+    exp: str = Form(...),
+    sig: str = Form(...),
+    code: str = Form(...),
+) -> RedirectResponse:
+    user_id = ensure_access(uid, exp, sig)
+    pending = PENDING_AUTHS.get(user_id)
+    if pending is None or pending.stage != "code":
+        return RedirectResponse(url=panel_url_query(uid, exp, sig), status_code=303)
+
+    try:
+        await pending.client.sign_in(
+            phone=pending.phone,
+            code=code.strip(),
+            phone_code_hash=pending.phone_code_hash,
+        )
+    except SessionPasswordNeededError:
+        pending.stage = "password"
+        return RedirectResponse(url=panel_url_query(uid, exp, sig), status_code=303)
+    except PhoneCodeInvalidError:
+        return RedirectResponse(
+            url=panel_url_with_message(uid, exp, sig, "Неверный код"),
+            status_code=303,
+        )
+    except PhoneCodeExpiredError:
+        await cleanup_pending_auth(user_id)
+        return RedirectResponse(
+            url=panel_url_with_message(uid, exp, sig, "Код истёк. Начните заново"),
+            status_code=303,
+        )
+
+    await cleanup_pending_auth(user_id)
+    client = await create_user_client(user_id)
+    try:
+        me = await client.get_me()
+        if me is not None:
+            save_session(user_id, me.id, client.session.save())
+    finally:
+        await client.disconnect()
+    return RedirectResponse(
+        url=panel_url_with_message(uid, exp, sig, "Аккаунт подключён"),
+        status_code=303,
+    )
+
+
+@app.post("/auth/password")
+async def auth_password(
+    uid: str = Form(...),
+    exp: str = Form(...),
+    sig: str = Form(...),
+    password: str = Form(...),
+) -> RedirectResponse:
+    user_id = ensure_access(uid, exp, sig)
+    pending = PENDING_AUTHS.get(user_id)
+    if pending is None or pending.stage != "password":
+        return RedirectResponse(url=panel_url_query(uid, exp, sig), status_code=303)
+
+    try:
+        await pending.client.sign_in(password=password)
+    except PasswordHashInvalidError:
+        return RedirectResponse(
+            url=panel_url_with_message(uid, exp, sig, "Неверный пароль 2FA"),
+            status_code=303,
+        )
+
+    await cleanup_pending_auth(user_id)
+    client = await create_user_client(user_id)
+    try:
+        me = await client.get_me()
+        if me is not None:
+            save_session(user_id, me.id, client.session.save())
+    finally:
+        await client.disconnect()
+    return RedirectResponse(
+        url=panel_url_with_message(uid, exp, sig, "Аккаунт подключён"),
+        status_code=303,
+    )
