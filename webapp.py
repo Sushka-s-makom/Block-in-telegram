@@ -364,6 +364,7 @@ async def auth_start(
     )
     return RedirectResponse(url=panel_url_query(uid, exp, sig), status_code=303)
 
+
 @app.post("/auth/code")
 async def auth_code(
     uid: str = Form(...),
@@ -444,6 +445,7 @@ async def auth_password(
         status_code=303,
     )
 
+
 @app.post("/logout")
 async def logout(
     uid: str = Form(...),
@@ -488,6 +490,8 @@ async def check(
             is_blocked = await check_blocked_via_call(client, target_user_id)
         else:
             is_blocked = await check_blocked_with_fallback(client, target_user_id)
+
+        result_text = "Пользователь вас заблокировал" if is_blocked else "Пользователь вас не заблокировал"
     except (
         BlockStatusUndeterminedError,
         PeerIdInvalidError,
@@ -499,8 +503,6 @@ async def check(
     ):
         logger.exception("web check failed uid=%s target=%r mode=%s", user_id, target, mode)
         result_text = "Пользователь вас не заблокировал"
-    else:
-        result_text = "Пользователь вас заблокировал" if is_blocked else "Пользователь вас не заблокировал"
     finally:
         await client.disconnect()
 
