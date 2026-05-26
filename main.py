@@ -135,3 +135,29 @@ await event.respond(
                 "Бот проверит её через Telethon, сохранит в БД и после этого даст доступ к панели и кнопкам проверок."
             )
         )
+        await event.answer()
+    @bot.on(events.NewMessage(incoming=True))
+    async def on_message(event: events.NewMessage.Event) -> None:
+        if not event.is_private or event.sender_id is None:
+            return
+        if (event.raw_text or "").startswith("/"):
+            return
+
+        if event.sender_id in PENDING_STRING_SESSION_INPUT:
+            PENDING_STRING_SESSION_INPUT.discard(event.sender_id)
+            session_string = (event.raw_text or "").strip()
+            client: TelegramClient | None = None
+
+            try:
+                client = TelegramClient(StringSession(session_string), settings.api_id, settings.api_hash)
+                await client.connect()
+                if not await client.is_user_authorized():
+                    await event.respond("Эта StringSession не авторизована.")
+                    return
+
+                me = await client.get_me()
+                if me is None:
+                    await event.respond("Не удалось прочитать владельца StringSession.")
+                    return
+
+
