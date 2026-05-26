@@ -93,3 +93,45 @@ async def run_forward_check(client: TelegramClient, user_id: int, mode: str) -> 
     if mode == "call":
         return await check_blocked_via_call(client, user_id)
     return await check_blocked_with_fallback(client, user_id)
+
+async def main() -> None:
+    configure_logging()
+    settings = load_settings()
+    os.makedirs("session", exist_ok=True)
+    init_db()
+
+    bot_session = (
+        StringSession(settings.bot_string_session)
+        if settings.bot_string_session
+        else settings.bot_session_name
+    )
+    bot = TelegramClient(bot_session, settings.api_id, settings.api_hash)
+
+    @bot.on(events.NewMessage(pattern=r"^/(start|menu)$"))
+    async def on_start(event: events.NewMessage.Event) -> None:
+        if event.sender_id is None:
+            return
+
+
+await event.respond(
+            (
+                "Откройте панель, подключите свой аккаунт по телефону и коду или вставьте готовую StringSession.\n\n"
+                "Для локальной генерации StringSession используйте .venv/bin/python generate_user_string_session.py.\n\n"
+                "Тихая проверка: смена темы с откатом.\n"
+                "Заметная проверка: короткий звонок с быстрым сбросом."
+            ),
+            buttons=build_panel_button(settings, event.sender_id),
+        )
+
+    @bot.on(events.NewMessage(pattern=r"^/session$"))
+    async def on_session_command(event: events.NewMessage.Event) -> None:
+        if event.sender_id is None:
+            return
+
+        PENDING_STRING_SESSION_INPUT.add(event.sender_id)
+        await event.respond(
+            (
+                "Отправьте в этот чат готовую StringSession.\n\n"
+                "Бот проверит её через Telethon, сохранит в БД и после этого даст доступ к панели и кнопкам проверок."
+            )
+        )
