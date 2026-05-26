@@ -64,3 +64,32 @@ def extract_forwarded_user_id(event: events.NewMessage.Event) -> int | None:
     if isinstance(from_id, types.PeerUser) or getattr(from_id, "user_id", None):
         return getattr(from_id, "user_id", None)
     return None
+async def create_connected_user_client(settings: Settings, bot_user_id: int) -> TelegramClient | None:
+    stored = get_session(bot_user_id)
+    if stored is None:
+        return None
+
+    client = TelegramClient(StringSession(stored.session_string), settings.api_id, settings.api_hash)
+    await client.connect()
+    if not await client.is_user_authorized():
+        await client.disconnect()
+        return None
+
+    return client
+
+
+async def run_check(client: TelegramClient, target: str, mode: str) -> bool:
+    user_id = await resolve_user_id(client, target)
+    if mode == "theme":
+        return await check_blocked_via_theme(client, user_id)
+    if mode == "call":
+        return await check_blocked_via_call(client, user_id)
+    return await check_blocked_with_fallback(client, user_id)
+
+
+async def run_forward_check(client: TelegramClient, user_id: int, mode: str) -> bool:
+    if mode == "theme":
+        return await check_blocked_via_theme(client, user_id)
+    if mode == "call":
+        return await check_blocked_via_call(client, user_id)
+    return await check_blocked_with_fallback(client, user_id)
