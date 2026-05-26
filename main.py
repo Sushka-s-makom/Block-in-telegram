@@ -43,3 +43,24 @@ def configure_logging() -> None:
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     )
+def build_panel_button(settings: Settings, telegram_user_id: int) -> list[list[Button]]:
+    panel_url = build_panel_url(settings.web_app_url, telegram_user_id, settings.app_secret)
+    is_connected = get_session(telegram_user_id) is not None
+    rows: list[list[Button]] = [[Button.url("Открыть панель", panel_url)]]
+    if is_connected:
+        rows.append([Button.inline("Тихая проверка", b"check:theme")])
+        rows.append([Button.inline("Заметная проверка", b"check:call")])
+        rows.append([Button.inline("Тихая + звонок", b"check:combo")])
+    rows.append([Button.inline("StringSession", b"info:stringsession")])
+    rows.append([Button.inline("Ввести StringSession", b"auth:stringsession")])
+    return rows
+
+
+def extract_forwarded_user_id(event: events.NewMessage.Event) -> int | None:
+    forward = event.message.forward
+    if forward is None:
+        return None
+    from_id = getattr(forward, "from_id", None)
+    if isinstance(from_id, types.PeerUser) or getattr(from_id, "user_id", None):
+        return getattr(from_id, "user_id", None)
+    return None
