@@ -184,7 +184,24 @@ try:
                     buttons=build_panel_button(settings, event.sender_id),
                 )
             finally:
-                await client.disconnect()
+                await client.disconnect() \
+                        try:
+                            await bot.start(bot_token=settings.bot_token)
+                            logger.info("bot started successfully")
+                            print("Bot is running.")
+                            await bot.disconnected
+                        finally:
+                            await bot.disconnect()
+
+                if name == "__main__":
+                    try:
+                        asyncio.run(main())
+                    except sqlite3.OperationalError as exc:
+                        if "database is locked" in str(exc).lower():
+                            raise RuntimeError(
+                                "A Telethon session database is locked. Stop the other running instance and try again."
+                            ) from exc
+                        raise
 
 
 
