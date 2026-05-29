@@ -159,5 +159,32 @@ await event.respond(
                 if me is None:
                     await event.respond("Не удалось прочитать владельца StringSession.")
                     return
+try:
+                forwarded_user_id = extract_forwarded_user_id(event)
+                if forwarded_user_id is not None:
+                    is_blocked = await run_forward_check(client, forwarded_user_id, mode)
+                else:
+                    is_blocked = await run_check(client, (event.raw_text or "").strip(), mode)
+            except (
+                BlockStatusUndeterminedError,
+                PeerIdInvalidError,
+                TypeError,
+                ValueError,
+            ):
+                logger.exception("check failed sender_id=%s mode=%s", event.sender_id, mode)
+                await event.respond(
+                    "✅ Пользователь вас не заблокировал",
+                    buttons=build_panel_button(settings, event.sender_id),
+                )
+            else:
+                await event.respond(
+                    "❌ Пользователь вас заблокировал"
+                    if is_blocked
+                    else "✅ Пользователь вас не заблокировал",
+                    buttons=build_panel_button(settings, event.sender_id),
+                )
+            finally:
+                await client.disconnect()
+
 
 
