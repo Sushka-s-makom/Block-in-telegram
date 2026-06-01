@@ -264,3 +264,7 @@ def run() -> None:
                 "A Telethon session database is locked. Stop the other running instance and try again."
             ) from exc
         raise
+
+
+if __name__ == "__main__":
+    run()

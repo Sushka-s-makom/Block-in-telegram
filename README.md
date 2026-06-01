@@ -67,13 +67,16 @@ Telegram не даёт прямого способа узнать, заблок�
 │   │   └── panel_links.py     # подпись ссылок в панель
 │   └── db/
 │       └── storage.py         # работа с SQLite
+├── assets/
+│   └── screenshots/
+├── docs/
+│   ├── CLAUDE.md
+│   └── FUTURE_PLANS.md
 ├── scripts/
 │   ├── generate_bot_string_session.py
 │   └── generate_user_string_session.py
 ├── session/
 │   └── users/
-├── main.py                    # точка входа для бота
-├── webapp.py                  # импорт FastAPI app для uvicorn
 ├── requirements.txt
 └── README.md
 ```
@@ -104,11 +107,11 @@ PROXY_URL=
 В двух терминалах:
 
 ```bash
-.venv/bin/python main.py
+.venv/bin/python -m app.bot
 ```
 
 ```bash
-.venv/bin/uvicorn webapp:app --host 0.0.0.0 --port 8000
+.venv/bin/uvicorn app.webapp:app --host 0.0.0.0 --port 8000
 ```
 
 ## Полезные скрипты

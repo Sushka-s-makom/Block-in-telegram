@@ -82,6 +82,8 @@ async def _delete_recent_phone_call_messages(client: TelegramClient, peer: int, 
             call_id,
             exc,
         )
+
+
 async def resolve_user_id(client: TelegramClient, raw_target: str) -> int:
     target = raw_target.strip()
     if not target:
@@ -101,6 +103,7 @@ async def resolve_user_id(client: TelegramClient, raw_target: str) -> int:
         raise TypeError("Target is a bot")
 
     return entity.id
+
 
 async def _get_current_chat_theme(client: TelegramClient, user_id: int) -> types.TypeInputChatTheme:
     full = await client(functions.users.GetFullUserRequest(id=user_id))
@@ -166,6 +169,7 @@ async def check_blocked_via_theme(client: TelegramClient, user_id: int) -> bool:
 
     return False
 
+
 async def check_blocked_via_call(client: TelegramClient, user_id: int) -> bool:
     protocol = types.PhoneCallProtocol(
         min_layer=65,
@@ -212,8 +216,9 @@ async def check_blocked_via_call(client: TelegramClient, user_id: int) -> bool:
 
     return False
 
+
 async def check_blocked_with_fallback(client: TelegramClient, user_id: int) -> bool:
     theme_result = await check_blocked_via_theme(client, user_id)
     if theme_result:
         return True
-    return await check_blocked_via_call(client, user_id) 
+    return await check_blocked_via_call(client, user_id)

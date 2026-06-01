@@ -18,6 +18,7 @@ def build_panel_url(base_url: str, user_id: int, secret: str, ttl_seconds: int =
     params = sign_panel_params(user_id, secret, ttl_seconds=ttl_seconds)
     return f"{base_url.rstrip('/')}/panel?{urlencode(params)}"
 
+
 def verify_panel_params(uid: str, exp: str, sig: str, secret: str) -> bool:
     try:
         exp_value = int(exp)
@@ -31,6 +32,3 @@ def verify_panel_params(uid: str, exp: str, sig: str, secret: str) -> bool:
     payload = f"{uid_value}:{exp_value}".encode("utf-8")
     expected = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, sig)
-
-
-

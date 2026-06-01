@@ -28,6 +28,7 @@ def load_settings() -> tuple[int, str, str | None]:
 
     return api_id, api_hash, proxy_url
 
+
 def build_proxy(proxy_url: str | None) -> object | None:
     if not proxy_url:
         return None
